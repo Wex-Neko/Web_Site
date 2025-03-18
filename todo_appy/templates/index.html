@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Список задач</title>
+    <style>
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .completed { text-decoration: line-through; color: #888; }
+        .task-item { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
+        button { margin: 5px; }
+        input[type="text"] { padding: 5px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="username-form">
+            <h2>Введите ваше имя</h2>
+            <input type="text" id="usernameInput" placeholder="Ваше имя">
+            <button onclick="saveUsername()">Войти/Создать</button>
+        </div>
+
+        <div id="tasksContainer" style="display: none;">
+            <h2>Ваши задачи</h2>
+            <input type="text" id="taskInput" placeholder="Новая задача">
+            <button onclick="addTask()">Добавить</button>
+            <ul id="tasksList"></ul>
+        </div>
+    </div>
+
+    <script>
+        let currentUserId = null;
+
+        function saveUsername() {
+            const username = document.getElementById('usernameInput').value.trim();
+            if (!username) {
+                alert('Пожалуйста, введите имя');
+                return;
+            }
+
+            fetch('/api/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    currentUserId = data.user_id;
+                    document.querySelector('.username-form').style.display = 'none';
+                    document.getElementById('tasksContainer').style.display = 'block';
+                    renderTasks(data.tasks);
+                } else {
+                    alert('Ошибка: ' + data.error);
+                }
+            })
+            .catch(error => alert('Ошибка: ' + error));
+        }
+
+        function renderTasks(tasks) {
+            const tasksList = document.getElementById('tasksList');
+            tasksList.innerHTML = '';
+            
+            tasks.forEach(task => {
+                const li = document.createElement('li');
+                li.className = 'task-item';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = task.completed;
+                checkbox.onchange = () => toggleTask(task.id);
+                
+                const span = document.createElement('span');
+                span.textContent = task.text;
+                if (task.completed) span.className = 'completed';
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.textContent = 'Удалить';
+                deleteBtn.onclick = () => deleteTask(task.id);
+                
+                li.appendChild(checkbox);
+                li.appendChild(span);
+                li.appendChild(deleteBtn);
+                tasksList.appendChild(li);
+            });
+        }
+
+        function addTask() {
+            const taskText = document.getElementById('taskInput').value.trim();
+            if (!taskText) {
+                alert('Пожалуйста, введите текст задачи');
+                return;
+            }
+
+            fetch('/api/tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: currentUserId, task_text: taskText })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    document.getElementById('taskInput').value = '';
+                    loadTasks();
+                } else {
+                    alert('Ошибка: ' + data.error);
+                }
+            })
+            .catch(error => alert('Ошибка: ' + error));
+        }
+
+        function loadTasks() {
+            fetch(`/api/tasks?user_id=${currentUserId}`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') renderTasks(data.tasks);
+            });
+        }
+
+        function toggleTask(taskId) {
+            const completed = event.target.checked;
+            fetch(`/api/tasks/${taskId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ completed })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') loadTasks();
+            });
+        }
+
+        function deleteTask(taskId) {
+            if (confirm('Вы уверены, что хотите удалить эту задачу?')) {
+                fetch(`/api/tasks/${taskId}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') loadTasks();
+                });
+            }
+        }
+    </script>
+</body>
+</html>
